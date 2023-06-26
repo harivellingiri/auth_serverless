@@ -1,0 +1,60 @@
+service: serverless
+frameworkVersion: '3'
+
+
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  timeout: 20
+  environment:
+    USER_POOL: { Ref: UserPool }
+    USER_POOL_CLIENT: { Ref: UserClient }
+  httpApi:
+    cors: true
+    authorizers: 
+      userAuthoriser:
+        identitySource: $request.header.Authorization
+        issuerUrl: {"Fn::Join": ["", ["https://cognito-idp.eu-north-1.amazonaws.com/", { Ref: UserPool }]]}
+        audience: { Ref: UserClient }
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+          - cognito-idp:AdminInitiateAuth
+          - cognito-idp:AdminCreateUser
+          - cognito-idp:AdminSetUserPassword
+          Resource: "*"
+
+resources:
+  Resources:
+    UserPool: 
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: ${file(./config.json):deployment.userPoolName}
+        Schema: 
+          - Name: email
+            Required: true
+            Mutable: true
+        Policies:
+          PasswordPolicy: 
+            MinimumLength: 6
+        AutoVerifiedAttributes: ["email"]    
+    UserClient: 
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: ${file(./config.json):deployment.clientName}
+        GenerateSecret: false
+        UserPoolId: 
+          Ref: UserPool
+        AccessTokenValidity: 5
+        IdTokenValidity: 5
+        ExplicitAuthFlows: 
+          - "ADMIN_NO_SRP_AUTH"
+plugins:
+  - serverless-offline
+custom:
+  serverless-offline:
+    useChildProcesses: true
+    noAuth: true
